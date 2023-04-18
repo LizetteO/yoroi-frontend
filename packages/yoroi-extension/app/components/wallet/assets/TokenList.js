@@ -272,7 +272,9 @@ function TokenItemRow({ avatar, name, id, amount, isTotalAmount }: TokenItemRowP
           <CopyToClipboardText text={id}>{truncateAddressShort(id)}</CopyToClipboardText>
         </Typography>
       }
-      thirdColumn={<Typography fontWeight="500">{amount}</Typography>}
+      thirdColumn={
+        <Typography fontWeight="500">{new Intl.NumberFormat().format(amount)}</Typography>
+      }
     />
   );
 }

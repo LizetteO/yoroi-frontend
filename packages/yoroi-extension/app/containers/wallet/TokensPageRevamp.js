@@ -31,10 +31,7 @@ export default class TokensPageRevamp extends Component<InjectedOrGenerated<Gene
 
     const assetsList = (() => {
       if (spendableBalance == null) return [];
-      return [
-        spendableBalance.getDefaultEntry() ,
-        ...spendableBalance.nonDefaultEntries()
-      ]
+      return [spendableBalance.getDefaultEntry(), ...spendableBalance.nonDefaultEntries()]
         .map(entry => ({
           entry,
           info: getTokenInfo(entry),
