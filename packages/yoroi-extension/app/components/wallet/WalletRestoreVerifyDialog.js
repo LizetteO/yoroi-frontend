@@ -21,6 +21,7 @@ import type { WalletChecksum } from '@emurgo/cip4-js';
 import type { $npm$ReactIntl$IntlFormat } from 'react-intl';
 import { truncateAddress } from '../../utils/formatters';
 import type { PlateWithMeta } from '../../stores/toplevel/WalletRestoreStore';
+import { Box } from '@mui/material';
 
 const messages = defineMessages({
   dialogTitleVerifyWalletRestoration: {
@@ -41,7 +42,8 @@ const messages = defineMessages({
   },
   walletRestoreVerifyIntroLine4: {
     id: 'wallet.restore.dialog.verify.intro.line4',
-    defaultMessage: '!!!If you\'ve entered wrong mnemonics or a wrong paper wallet password -' +
+    defaultMessage:
+      "!!!If you've entered wrong mnemonics or a wrong paper wallet password -" +
       ' you will just open another empty wallet with wrong account checksum and wrong addresses!',
   },
 });
@@ -59,27 +61,20 @@ type Props = {|
 
 @observer
 export default class WalletRestoreVerifyDialog extends Component<Props> {
-  static defaultProps: {|error: void|} = {
+  static defaultProps: {| error: void |} = {
     error: undefined,
   };
 
-  static contextTypes: {|intl: $npm$ReactIntl$IntlFormat|} = {
+  static contextTypes: {| intl: $npm$ReactIntl$IntlFormat |} = {
     intl: intlShape.isRequired,
   };
 
-  generatePlate(
-    title: string,
-    plate: WalletChecksum,
-  ): Node {
+  generatePlate(title: string, plate: WalletChecksum): Node {
     return (
       <div key={title}>
-        <h2 className={styles.addressLabel}>
-          {title}
-        </h2>
+        <h2 className={styles.addressLabel}>{title}</h2>
         <div className={styles.plateRowDiv}>
-          <WalletAccountIcon
-            iconSeed={plate.ImagePart}
-          />
+          <WalletAccountIcon iconSeed={plate.ImagePart} />
           <span className={styles.plateIdSpan}>{plate.TextPart}</span>
         </div>
       </div>
@@ -90,36 +85,34 @@ export default class WalletRestoreVerifyDialog extends Component<Props> {
     title: string,
     addresses: Array<string>,
     onCopyAddressTooltip: (string, string) => void,
-    notification: ?Notification,
+    notification: ?Notification
   ): Node {
     return (
       <>
-        <h2 className={styles.addressLabel}>
-          {title}
-        </h2>
+        <h2 className={styles.addressLabel}>{title}</h2>
         {addresses.map((address, index) => {
           const notificationElementId = `${address}-${index}`;
           return (
-            <CopyableAddress
-              hash={address}
-              elementId={notificationElementId}
-              onCopyAddress={() => onCopyAddressTooltip(address, notificationElementId)}
-              notification={notification}
-              placementTooltip="top-start"
-              key={address}
-            >
-              <ExplorableHashContainer
-                selectedExplorer={this.props.selectedExplorer}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+              <CopyableAddress
                 hash={address}
-                light
+                elementId={notificationElementId}
+                onCopyAddress={() => onCopyAddressTooltip(address, notificationElementId)}
+                notification={notification}
                 placementTooltip="top-start"
-                linkType="address"
+                key={address}
               >
-                <RawHash light>
-                  {truncateAddress(address)}
-                </RawHash>
-              </ExplorableHashContainer>
-            </CopyableAddress>
+                <ExplorableHashContainer
+                  selectedExplorer={this.props.selectedExplorer}
+                  hash={address}
+                  light
+                  placementTooltip="top-start"
+                  linkType="address"
+                >
+                  <RawHash light>{truncateAddress(address)}</RawHash>
+                </ExplorableHashContainer>
+              </CopyableAddress>
+            </Box>
           );
         })}
       </>
@@ -156,32 +149,40 @@ export default class WalletRestoreVerifyDialog extends Component<Props> {
 
     const introMessage = (
       <div>
-        <span>{intl.formatMessage(messages.walletRestoreVerifyIntroLine1)}</span><br />
+        <span>{intl.formatMessage(messages.walletRestoreVerifyIntroLine1)}</span>
+        <br />
         <ul>
           <li className={styles.smallTopMargin}>
-            <span><FormattedHTMLMessage {...messages.walletRestoreVerifyIntroLine2} /></span>
+            <span>
+              <FormattedHTMLMessage {...messages.walletRestoreVerifyIntroLine2} />
+            </span>
           </li>
           <li className={styles.smallTopMargin}>
-            <span><FormattedHTMLMessage {...messages.walletRestoreVerifyIntroLine3} /></span>
+            <span>
+              <FormattedHTMLMessage {...messages.walletRestoreVerifyIntroLine3} />
+            </span>
           </li>
           <li className={styles.smallTopMargin}>
-            <span><FormattedHTMLMessage {...messages.walletRestoreVerifyIntroLine4} /></span>
+            <span>
+              <FormattedHTMLMessage {...messages.walletRestoreVerifyIntroLine4} />
+            </span>
           </li>
         </ul>
       </div>
     );
 
-    const plateElems = this.props.plates.map(plate => this.generatePlate(
-      intl.formatMessage(plate.checksumTitle),
-      plate.plate,
-    ));
+    const plateElems = this.props.plates.map(plate =>
+      this.generatePlate(intl.formatMessage(plate.checksumTitle), plate.plate)
+    );
 
-    const addressElems = this.props.plates.map(plate => this.generateAddresses(
-      intl.formatMessage(plate.addressMessage),
-      plate.addresses,
-      onCopyAddressTooltip,
-      notification
-    ));
+    const addressElems = this.props.plates.map(plate =>
+      this.generateAddresses(
+        intl.formatMessage(plate.addressMessage),
+        plate.addresses,
+        onCopyAddressTooltip,
+        notification
+      )
+    );
 
     return (
       <Dialog
@@ -192,14 +193,16 @@ export default class WalletRestoreVerifyDialog extends Component<Props> {
         className={dialogClasses}
         backButton={<DialogBackButton onBack={onCancel} />}
       >
-        <DialogTextBlock>
-          {introMessage}
-        </DialogTextBlock>
+        <DialogTextBlock>{introMessage}</DialogTextBlock>
 
         <DialogTextBlock>
-          <CenteredLayout>
-            {plateElems}
-          </CenteredLayout>
+          <Box
+            sx={{
+              '& div': { bgcolor: 'common.white' },
+            }}
+          >
+            <CenteredLayout>{plateElems}</CenteredLayout>
+          </Box>
         </DialogTextBlock>
 
         <DialogTextBlock subclass="component-bottom">
@@ -209,20 +212,19 @@ export default class WalletRestoreVerifyDialog extends Component<Props> {
               return <span key={i}>{elem}</span>;
             }
             // eslint-disable-next-line react/no-array-index-key
-            return <span key={i}><br />{elem}</span>;
+            return (
+              <span key={i}>
+                <br />
+                {elem}
+              </span>
+            );
           })}
         </DialogTextBlock>
 
         <div className={styles.postCopyMargin} />
 
-        {error && (
-          <p className={styles.error}>
-            {intl.formatMessage(error, error.values)}
-          </p>
-        )}
-
+        {error && <p className={styles.error}>{intl.formatMessage(error, error.values)}</p>}
       </Dialog>
     );
   }
-
 }

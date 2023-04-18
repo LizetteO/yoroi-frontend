@@ -9,27 +9,37 @@ import type {
   V4UnsignedTxAddressedUtxoResponse,
   V4UnsignedTxUtxoResponse,
 } from '../types';
-import type { RemoteUnspentOutput, } from '../../lib/state-fetch/types';
+import type { RemoteUnspentOutput } from '../../lib/state-fetch/types';
 import {
   AssetOverflowError,
   CannotSendBelowMinimumValueError,
   NoOutputsError,
-  NotEnoughMoneyToSendError
+  NotEnoughMoneyToSendError,
 } from '../../../common/errors';
 
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { derivePrivateByAddressing } from '../../lib/cardanoCrypto/utils';
 
-import { Bip44DerivationLevels, } from '../../lib/storage/database/walletTypes/bip44/api/utils';
-import type { Address, Addressing, } from '../../lib/storage/models/PublicDeriver/interfaces';
+import { Bip44DerivationLevels } from '../../lib/storage/database/walletTypes/bip44/api/utils';
+import type { Address, Addressing } from '../../lib/storage/models/PublicDeriver/interfaces';
 import { getCardanoSpendingKeyHash, normalizeToAddress } from '../../lib/storage/bridge/utils';
-import { MultiToken, } from '../../../common/lib/MultiToken';
+import { MultiToken } from '../../../common/lib/MultiToken';
 import { PRIMARY_ASSET_CONSTANTS } from '../../lib/storage/database/primitives/enums';
-import { cardanoValueFromMultiToken, cardanoValueFromRemoteFormat, multiTokenFromCardanoValue, asAddressedUtxo, multiTokenFromRemote } from '../utils';
+import {
+  cardanoValueFromMultiToken,
+  cardanoValueFromRemoteFormat,
+  multiTokenFromCardanoValue,
+  asAddressedUtxo,
+  multiTokenFromRemote,
+} from '../utils';
 import { hexToBytes, logErr } from '../../../../coreUtils';
 import { coinSelectionForValues } from './coinSelection';
 import { getCardanoHaskellBaseConfig } from '../../lib/storage/database/prepackaged/networks';
-import { IPublicDeriver, IGetAllUtxos, IHasUtxoChains } from '../../lib/storage/models/PublicDeriver/interfaces';
+import {
+  IPublicDeriver,
+  IGetAllUtxos,
+  IHasUtxoChains,
+} from '../../lib/storage/models/PublicDeriver/interfaces';
 import { ConceptualWallet } from '../../lib/storage/models/ConceptualWallet/index';
 import { builtSendTokenList } from '../../../common';
 import type { TokenRow } from '../../lib/storage/database/primitives/tables';
@@ -56,7 +66,7 @@ type TxMint = {|
 type TxAuxiliaryData = {|
   metadata: ?TxMetadata,
   nativeScripts: ?Array<string>,
-|}
+|};
 
 type TxMetadata = {
   [tag: string]: string,
@@ -73,36 +83,37 @@ export function sendAllUnsignedTx(
     keyDeposit: RustModule.WalletV4.BigNum,
     networkId: number,
   |},
-  metadata: RustModule.WalletV4.AuxiliaryData | void,
+  metadata: RustModule.WalletV4.AuxiliaryData | void
 ): V4UnsignedTxAddressedUtxoResponse {
   const addressingMap = new Map<RemoteUnspentOutput, CardanoAddressedUtxo>();
   for (const utxo of allUtxos) {
-    addressingMap.set({
-      amount: utxo.amount,
-      receiver: utxo.receiver,
-      tx_hash: utxo.tx_hash,
-      tx_index: utxo.tx_index,
-      utxo_id: utxo.utxo_id,
-      assets: utxo.assets,
-    }, utxo);
+    addressingMap.set(
+      {
+        amount: utxo.amount,
+        receiver: utxo.receiver,
+        tx_hash: utxo.tx_hash,
+        tx_index: utxo.tx_index,
+        utxo_id: utxo.utxo_id,
+        assets: utxo.assets,
+      },
+      utxo
+    );
   }
   const unsignedTxResponse = sendAllUnsignedTxFromUtxo(
     receiver,
     Array.from(addressingMap.keys()),
     absSlotNumber,
     protocolParams,
-    metadata,
+    metadata
   );
 
-  const addressedUtxos = unsignedTxResponse.senderUtxos.map(
-    utxo => {
-      const addressedUtxo = addressingMap.get(utxo);
-      if (addressedUtxo == null) {
-        throw new Error(`${nameof(sendAllUnsignedTx)} utxo reference was changed. Should not happen`);
-      }
-      return addressedUtxo;
+  const addressedUtxos = unsignedTxResponse.senderUtxos.map(utxo => {
+    const addressedUtxo = addressingMap.get(utxo);
+    if (addressedUtxo == null) {
+      throw new Error(`${nameof(sendAllUnsignedTx)} utxo reference was changed. Should not happen`);
     }
-  );
+    return addressedUtxo;
+  });
 
   return {
     senderUtxos: addressedUtxos,
@@ -133,7 +144,7 @@ function addUtxoInput(
   protocolParams: {|
     networkId: number,
   |},
-  witness?: ?CardanoUtxoScriptWitness,
+  witness?: ?CardanoUtxoScriptWitness
 ): $Values<typeof AddInputResult> {
   const wasmAddr = normalizeToAddress(input.receiver);
   if (wasmAddr == null) {
@@ -152,7 +163,7 @@ function addUtxoInput(
      * and this just requires more ADA to cover the min UTXO of these added inputs
      * but as a simple solution for now, we just block > u64 inputs of any token
      * This isn't a great workaround since it means features like sendAll may end up not sending all
-    */
+     */
     const currentInputSum = txBuilder
       .get_explicit_input()
       .checked_add(txBuilder.get_implicit_input());
@@ -162,7 +173,7 @@ function addUtxoInput(
       return AddInputResult.OVERFLOW;
     }
     return AddInputResult.VALID;
-  }
+  };
   const skipInput: void => $Values<typeof AddInputResult> = () => {
     if (remaining == null) return skipOverflow();
 
@@ -171,13 +182,10 @@ function addUtxoInput(
       defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
     };
     const tokenSetInInput = new Set(input.assets.map(asset => asset.assetId));
-    const remainingTokens = multiTokenFromCardanoValue(
-      remaining.value,
-      defaultEntry,
-    );
-    const includedTargets = remainingTokens.nonDefaultEntries().filter(
-      entry => tokenSetInInput.has(entry.identifier)
-    );
+    const remainingTokens = multiTokenFromCardanoValue(remaining.value, defaultEntry);
+    const includedTargets = remainingTokens
+      .nonDefaultEntries()
+      .filter(entry => tokenSetInInput.has(entry.identifier));
 
     if (remainingTokens.getDefaultEntry().amount.gt(0) && new BigNumber(input.amount).gt(0)) {
       includedTargets.push(remainingTokens.getDefaultEntry());
@@ -190,18 +198,13 @@ function addUtxoInput(
     //   return AddInputResult.NO_NEED;
     // }
 
-    const onlyDefaultEntry = (
+    const onlyDefaultEntry =
       includedTargets.length === 1 &&
-      includedTargets[0].identifier === defaultEntry.defaultIdentifier
-    );
+      includedTargets[0].identifier === defaultEntry.defaultIdentifier;
     // ignore UTXO that contribute less than their fee if they also don't contribute a token
     if (onlyDefaultEntry && excludeIfSmall) {
       const feeForInput = new BigNumber(
-        txBuilder.fee_for_input(
-          wasmAddr,
-          txInput,
-          wasmAmount
-        ).to_str()
+        txBuilder.fee_for_input(wasmAddr, txInput, wasmAmount).to_str()
       );
       if (feeForInput.gt(input.amount)) {
         return AddInputResult.TOO_SMALL;
@@ -209,7 +212,7 @@ function addUtxoInput(
     }
 
     return skipOverflow();
-  }
+  };
 
   const skipResult = skipInput();
   if (skipResult !== AddInputResult.VALID) {
@@ -217,58 +220,41 @@ function addUtxoInput(
   }
 
   if (witness == null) {
-    logErr(
-      () => {
-        txBuilder.add_input(
-          wasmAddr,
-          txInput,
-          wasmAmount
-        );
-      },
-      'Failed to add a regular input',
-    );
+    logErr(() => {
+      txBuilder.add_input(wasmAddr, txInput, wasmAmount);
+    }, 'Failed to add a regular input');
   } else if (witness.nativeScript != null) {
     const nativeScript = logErr(
       // $FlowFixMe[prop-missing]
       () => RustModule.WalletV4.NativeScript.from_bytes(hexToBytes(witness.nativeScript)),
-      `Failed to parse witness.nativeScript: ${JSON.stringify(witness)}`,
+      `Failed to parse witness.nativeScript: ${JSON.stringify(witness)}`
     );
-    logErr(
-      () => {
-        txBuilder.add_native_script_input(
-          nativeScript,
-          txInput,
-          wasmAmount,
-        );
-      },
-      'Failed to add a native script input',
-    );
+    logErr(() => {
+      txBuilder.add_native_script_input(nativeScript, txInput, wasmAmount);
+    }, 'Failed to add a native script input');
   } else if (witness.plutusScript != null) {
     const plutusScript = logErr(
       // $FlowFixMe[prop-missing]
       () => RustModule.WalletV4.PlutusScript.from_bytes(hexToBytes(witness.plutusScript)),
-      `Failed to parse witness.plutusScript: ${JSON.stringify(witness)}`,
+      `Failed to parse witness.plutusScript: ${JSON.stringify(witness)}`
     );
     const datum = logErr(
       // $FlowFixMe[prop-missing]
       () => RustModule.WalletV4.PlutusData.from_bytes(hexToBytes(witness.datum)),
-      `Failed to parse witness.datum: ${JSON.stringify(witness)}`,
+      `Failed to parse witness.datum: ${JSON.stringify(witness)}`
     );
     const redeemer = logErr(
       // $FlowFixMe[prop-missing]
       () => RustModule.WalletV4.Redeemer.from_bytes(hexToBytes(witness.redeemer)),
-      `Failed to parse witness.redeemer: ${JSON.stringify(witness)}`,
+      `Failed to parse witness.redeemer: ${JSON.stringify(witness)}`
     );
-    logErr(
-      () => {
-        txBuilder.add_plutus_script_input(
-          RustModule.WalletV4.PlutusWitness.new(plutusScript, datum, redeemer),
-          txInput,
-          wasmAmount,
-        );
-      },
-      'Failed to add a plutus script input',
-    );
+    logErr(() => {
+      txBuilder.add_plutus_script_input(
+        RustModule.WalletV4.PlutusWitness.new(plutusScript, datum, redeemer),
+        txInput,
+        wasmAmount
+      );
+    }, 'Failed to add a plutus script input');
   }
   return AddInputResult.VALID;
 }
@@ -284,14 +270,11 @@ export function sendAllUnsignedTxFromUtxo(
     keyDeposit: RustModule.WalletV4.BigNum,
     networkId: number,
   |},
-  metadata: RustModule.WalletV4.AuxiliaryData | void,
+  metadata: RustModule.WalletV4.AuxiliaryData | void
 ): V4UnsignedTxUtxoResponse {
   const totalBalance = allUtxos
     .map(utxo => new BigNumber(utxo.amount))
-    .reduce(
-      (acc, amount) => acc.plus(amount),
-      new BigNumber(0)
-    );
+    .reduce((acc, amount) => acc.plus(amount), new BigNumber(0));
   if (totalBalance.isZero()) {
     throw new NotEnoughMoneyToSendError();
   }
@@ -300,13 +283,10 @@ export function sendAllUnsignedTxFromUtxo(
   txBuilder.set_ttl(absSlotNumber.plus(defaultTtlOffset).toNumber());
 
   for (const input of allUtxos) {
-    if (addUtxoInput(
-      txBuilder,
-      undefined,
-      input,
-      false,
-      { networkId: protocolParams.networkId }
-    ) === AddInputResult.OVERFLOW) {
+    if (
+      addUtxoInput(txBuilder, undefined, input, false, { networkId: protocolParams.networkId }) ===
+      AddInputResult.OVERFLOW
+    ) {
       // for the send all case, prefer to throw an error
       // instead of skipping inputs that would cause an error
       // otherwise leads to unexpected cases like wallet migration leaving some UTXO behind
@@ -314,7 +294,7 @@ export function sendAllUnsignedTxFromUtxo(
     }
   }
 
-  if(metadata !== undefined){
+  if (metadata !== undefined) {
     txBuilder.set_auxiliary_data(metadata);
   }
 
@@ -350,20 +330,19 @@ export function sendAllUnsignedTxFromUtxo(
   }
 
   const changeAddr = (() => {
-    if (receiver.addressing== null) return [];
+    if (receiver.addressing == null) return [];
     const { addressing } = receiver;
 
-    return [{
-      addressing,
-      address: receiver.address,
-      values: multiTokenFromCardanoValue(
-        txBuilder.get_explicit_output(),
-        {
+    return [
+      {
+        addressing,
+        address: receiver.address,
+        values: multiTokenFromCardanoValue(txBuilder.get_explicit_output(), {
           defaultNetworkId: protocolParams.networkId,
           defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-        }
-      ),
-    }];
+        }),
+      },
+    ];
   })();
 
   return {
@@ -394,18 +373,21 @@ export function newAdaUnsignedTx(
     amount: RustModule.WalletV4.BigNum,
   |}>,
   allowNoOutputs: boolean,
-  metadata: RustModule.WalletV4.AuxiliaryData | void,
+  metadata: RustModule.WalletV4.AuxiliaryData | void
 ): V4UnsignedTxAddressedUtxoResponse {
   const addressingMap = new Map<RemoteUnspentOutput, CardanoAddressedUtxo>();
   for (const utxo of allUtxos) {
-    addressingMap.set({
-      amount: utxo.amount,
-      receiver: utxo.receiver,
-      tx_hash: utxo.tx_hash,
-      tx_index: utxo.tx_index,
-      utxo_id: utxo.utxo_id,
-      assets: utxo.assets,
-    }, utxo);
+    addressingMap.set(
+      {
+        amount: utxo.amount,
+        receiver: utxo.receiver,
+        tx_hash: utxo.tx_hash,
+        tx_index: utxo.tx_index,
+        utxo_id: utxo.utxo_id,
+        assets: utxo.assets,
+      },
+      utxo
+    );
   }
   const unsignedTxResponse = newAdaUnsignedTxFromUtxo(
     outputs,
@@ -416,18 +398,16 @@ export function newAdaUnsignedTx(
     certificates,
     withdrawals,
     allowNoOutputs,
-    metadata,
+    metadata
   );
 
-  const addressedUtxos = unsignedTxResponse.senderUtxos.map(
-    utxo => {
-      const addressedUtxo = addressingMap.get(utxo);
-      if (addressedUtxo == null) {
-        throw new Error(`${nameof(newAdaUnsignedTx)} utxo reference was changed. Should not happen`);
-      }
-      return addressedUtxo;
+  const addressedUtxos = unsignedTxResponse.senderUtxos.map(utxo => {
+    const addressedUtxo = addressingMap.get(utxo);
+    if (addressedUtxo == null) {
+      throw new Error(`${nameof(newAdaUnsignedTx)} utxo reference was changed. Should not happen`);
     }
-  );
+    return addressedUtxo;
+  });
 
   return {
     senderUtxos: addressedUtxos,
@@ -454,7 +434,7 @@ export function newAdaUnsignedTxForConnector(
     poolDeposit: RustModule.WalletV4.BigNum,
     keyDeposit: RustModule.WalletV4.BigNum,
     networkId: number,
-  |},
+  |}
 ): V4UnsignedTxAddressedUtxoResponse {
   const toRemoteUnspentOutput = (utxo: CardanoAddressedUtxo): RemoteUnspentOutput => ({
     amount: utxo.amount,
@@ -486,19 +466,17 @@ export function newAdaUnsignedTxForConnector(
     validityStart,
     ttl,
     requiredSigners,
-    protocolParams,
+    protocolParams
   );
 
-  const addressedUtxos = unsignedTxResponse.senderUtxos.map(
-    utxo => {
-      const addressedUtxo = addressingMapForMustIncludeUtxos.get(utxo) ||
-        addressingMapForCoinSelectUtxos.get(utxo);
-      if (addressedUtxo == null) {
-        throw new Error(`${nameof(newAdaUnsignedTx)} utxo reference was changed. Should not happen`);
-      }
-      return addressedUtxo;
+  const addressedUtxos = unsignedTxResponse.senderUtxos.map(utxo => {
+    const addressedUtxo =
+      addressingMapForMustIncludeUtxos.get(utxo) || addressingMapForCoinSelectUtxos.get(utxo);
+    if (addressedUtxo == null) {
+      throw new Error(`${nameof(newAdaUnsignedTx)} utxo reference was changed. Should not happen`);
     }
-  );
+    return addressedUtxo;
+  });
 
   return {
     senderUtxos: addressedUtxos,
@@ -532,9 +510,8 @@ export function newAdaUnsignedTxFromUtxo(
     amount: RustModule.WalletV4.BigNum,
   |}>,
   allowNoOutputs: boolean,
-  metadata: RustModule.WalletV4.AuxiliaryData | void,
+  metadata: RustModule.WalletV4.AuxiliaryData | void
 ): V4UnsignedTxUtxoResponse {
-
   const mustForceChange = outputs.length === 0 && !allowNoOutputs;
   if (mustForceChange && changeAdaAddr == null) {
     // cannot force change with no change address
@@ -546,7 +523,7 @@ export function newAdaUnsignedTxFromUtxo(
     outputs.map(o => o.amount),
     mustForceChange,
     protocolParams.coinsPerUtxoWord,
-    protocolParams.networkId,
+    protocolParams.networkId
   );
 
   const changeOutputs: Array<TxOutput> = [];
@@ -567,7 +544,7 @@ export function newAdaUnsignedTxFromUtxo(
     protocolParams,
     certificates,
     withdrawals,
-    metadata,
+    metadata
   );
 }
 
@@ -589,31 +566,24 @@ function _newAdaUnsignedTxFromUtxo(
     address: RustModule.WalletV4.RewardAddress,
     amount: RustModule.WalletV4.BigNum,
   |}>,
-  metadata: RustModule.WalletV4.AuxiliaryData | void,
+  metadata: RustModule.WalletV4.AuxiliaryData | void
 ): V4UnsignedTxUtxoResponse {
-
   const txBuilder = RustModule.WalletV4TxBuilder(protocolParams);
   if (certificates.length > 0) {
-    const certsWasm = certificates.reduce(
-      (certs, cert) => { certs.add(cert); return certs; },
-      RustModule.WalletV4.Certificates.new()
-    );
+    const certsWasm = certificates.reduce((certs, cert) => {
+      certs.add(cert);
+      return certs;
+    }, RustModule.WalletV4.Certificates.new());
     txBuilder.set_certs(certsWasm);
   }
-  if (metadata !== undefined){
+  if (metadata !== undefined) {
     txBuilder.set_auxiliary_data(metadata);
   }
   if (withdrawals.length > 0) {
-    const withdrawalWasm = withdrawals.reduce(
-      (withs, withdrawal) => {
-        withs.insert(
-          withdrawal.address,
-          withdrawal.amount,
-        );
-        return withs;
-      },
-      RustModule.WalletV4.Withdrawals.new()
-    );
+    const withdrawalWasm = withdrawals.reduce((withs, withdrawal) => {
+      withs.insert(withdrawal.address, withdrawal.amount);
+      return withs;
+    }, RustModule.WalletV4.Withdrawals.new());
     txBuilder.set_withdrawals(withdrawalWasm);
   }
   txBuilder.set_ttl(absSlotNumber.plus(defaultTtlOffset).toNumber());
@@ -627,7 +597,7 @@ function _newAdaUnsignedTxFromUtxo(
       txBuilder.add_output(
         RustModule.WalletV4.TransactionOutput.new(
           wasmReceiver,
-          cardanoValueFromMultiToken(output.amount),
+          cardanoValueFromMultiToken(output.amount)
         )
       );
     } catch (e) {
@@ -653,11 +623,7 @@ function _newAdaUnsignedTxFromUtxo(
     }
     const txInput = utxoToTxInput(utxo);
     const wasmAmount = cardanoValueFromRemoteFormat(utxo);
-    txBuilder.add_input(
-      wasmAddr,
-      txInput,
-      wasmAmount,
-    );
+    txBuilder.add_input(wasmAddr, txInput, wasmAmount);
   }
 
   const changeAddr = (() => {
@@ -707,10 +673,12 @@ function _newAdaUnsignedTxFromUtxo(
       }
     );
     return changeWasAdded
-      ? [{
-        ...changeAdaAddr,
-        values: output,
-      }]
+      ? [
+          {
+            ...changeAdaAddr,
+            values: output,
+          },
+        ]
       : [];
   })();
 
@@ -721,28 +689,30 @@ function _newAdaUnsignedTxFromUtxo(
   };
 }
 
-export async function maxSendableADA(
-  request: {|
-    publicDeriver: IPublicDeriver<ConceptualWallet> & IGetAllUtxos & IHasUtxoChains,
-    absSlotNumber: BigNumber,
-    receiver: string | null,
-    tokens: Array<$ReadOnly<{|
+export async function maxSendableADA(request: {|
+  publicDeriver: IPublicDeriver<ConceptualWallet> & IGetAllUtxos & IHasUtxoChains,
+  absSlotNumber: BigNumber,
+  receiver: string | null,
+  tokens: Array<
+    $ReadOnly<{|
       token: $ReadOnly<TokenRow>,
       shouldSendAll?: boolean,
       amount?: string,
-    |}>>
-  |}
-): Promise<BigNumber> {
+    |}>
+  >,
+|}): Promise<BigNumber> {
   try {
-    const network = request.publicDeriver.getParent().getNetworkInfo()
-    const config = getCardanoHaskellBaseConfig(network)
-      .reduce((acc, next) => Object.assign(acc, next), {});
+    const network = request.publicDeriver.getParent().getNetworkInfo();
+    const config = getCardanoHaskellBaseConfig(network).reduce(
+      (acc, next) => Object.assign(acc, next),
+      {}
+    );
 
     const protocolParams = {
       keyDeposit: RustModule.WalletV4.BigNum.from_str(config.KeyDeposit),
       linearFee: RustModule.WalletV4.LinearFee.new(
         RustModule.WalletV4.BigNum.from_str(config.LinearFee.coefficient),
-        RustModule.WalletV4.BigNum.from_str(config.LinearFee.constant),
+        RustModule.WalletV4.BigNum.from_str(config.LinearFee.constant)
       ),
       coinsPerUtxoWord: RustModule.WalletV4.BigNum.from_str(config.CoinsPerUtxoWord),
       poolDeposit: RustModule.WalletV4.BigNum.from_str(config.PoolDeposit),
@@ -753,10 +723,7 @@ export async function maxSendableADA(
     const addressedUtxo = asAddressedUtxo(utxos);
     const totalBalance = addressedUtxo
       .map(utxo => new BigNumber(utxo.amount))
-      .reduce(
-        (acc, amount) => acc.plus(amount),
-        new BigNumber(0)
-      );
+      .reduce((acc, amount) => acc.plus(amount), new BigNumber(0));
     if (totalBalance.isZero()) {
       throw new NotEnoughMoneyToSendError();
     }
@@ -771,36 +738,40 @@ export async function maxSendableADA(
     if (wasmReceiver == null) {
       throw new Error(`${nameof(maxSendableADA)} receiver not a valid Shelley address`);
     }
-    const isAssetsSelected = request.tokens.length >= 2 // [ada, ...tokens]
+    const isAssetsSelected = request.tokens.length >= 2; // [ada, ...tokens]
     if (isAssetsSelected) {
-      const defaultToken = request.publicDeriver.getParent().getDefaultToken()
+      const defaultToken = request.publicDeriver.getParent().getDefaultToken();
       txBuilder.add_output(
         RustModule.WalletV4.TransactionOutput.new(
           wasmReceiver,
-          cardanoValueFromMultiToken(builtSendTokenList(
-            defaultToken,
-            request.tokens,
-            addressedUtxo.map(utxo => multiTokenFromRemote(utxo, protocolParams.networkId))
-          )),
+          cardanoValueFromMultiToken(
+            builtSendTokenList(
+              defaultToken,
+              request.tokens,
+              addressedUtxo.map(utxo => multiTokenFromRemote(utxo, protocolParams.networkId))
+            )
+          )
         )
-      )
+      );
     }
 
     for (const input of addressedUtxo) {
-      if (addUtxoInput(
-        txBuilder,
-        undefined,
-        {
-          amount: input.amount,
-          receiver: input.receiver,
-          tx_hash: input.tx_hash,
-          tx_index: input.tx_index,
-          utxo_id: input.utxo_id,
-          assets: input.assets,
-        },
-        false,
-        { networkId: network.NetworkId }
-      ) === AddInputResult.OVERFLOW) {
+      if (
+        addUtxoInput(
+          txBuilder,
+          undefined,
+          {
+            amount: input.amount,
+            receiver: input.receiver,
+            tx_hash: input.tx_hash,
+            tx_index: input.tx_index,
+            utxo_id: input.utxo_id,
+            assets: input.assets,
+          },
+          false,
+          { networkId: network.NetworkId }
+        ) === AddInputResult.OVERFLOW
+      ) {
         throw new AssetOverflowError();
       }
     }
@@ -851,16 +822,16 @@ function newAdaUnsignedTxFromUtxoForConnector(
     poolDeposit: RustModule.WalletV4.BigNum,
     keyDeposit: RustModule.WalletV4.BigNum,
     networkId: number,
-  |},
+  |}
 ): V4UnsignedTxUtxoResponse {
   const txBuilder = RustModule.WalletV4TxBuilder(protocolParams);
   if (validityStart != null) {
-    txBuilder.set_validity_start_interval(validityStart)
+    txBuilder.set_validity_start_interval(validityStart);
   }
   if (ttl != null) {
     txBuilder.set_ttl(ttl);
   } else {
-    txBuilder.set_ttl((absSlotNumber.plus(defaultTtlOffset).toNumber()));
+    txBuilder.set_ttl(absSlotNumber.plus(defaultTtlOffset).toNumber());
   }
   function addOutput(output: TxOutput): void {
     const wasmReceiver = normalizeToAddress(output.address);
@@ -870,16 +841,14 @@ function newAdaUnsignedTxFromUtxoForConnector(
     try {
       const newOutput = RustModule.WalletV4.TransactionOutput.new(
         wasmReceiver,
-        cardanoValueFromMultiToken(output.amount),
+        cardanoValueFromMultiToken(output.amount)
       );
       if (output.dataHash != null) {
-        newOutput.set_data_hash(RustModule.WalletV4.DataHash.from_bytes(
-          Buffer.from(output.dataHash, 'hex')
-        ));
+        newOutput.set_data_hash(
+          RustModule.WalletV4.DataHash.from_bytes(Buffer.from(output.dataHash, 'hex'))
+        );
       }
-      txBuilder.add_output(
-        newOutput
-      );
+      txBuilder.add_output(newOutput);
     } catch (e) {
       if (String(e).includes('less than the minimum UTXO value')) {
         throw new CannotSendBelowMinimumValueError();
@@ -901,21 +870,15 @@ function newAdaUnsignedTxFromUtxoForConnector(
   {
     for (const m of mint) {
       const mintScript = RustModule.WalletV4.NativeScript.from_bytes(
-        Buffer.from(m.policyScript, 'hex'),
+        Buffer.from(m.policyScript, 'hex')
       );
-      const mintName = RustModule.WalletV4.AssetName.new(
-        Buffer.from(m.assetName, 'hex'),
-      );
+      const mintName = RustModule.WalletV4.AssetName.new(Buffer.from(m.assetName, 'hex'));
       const amountBignum = new BigNumber(m.amount);
       const wasmAmountBignum = RustModule.WalletV4.BigNum.from_str(amountBignum.abs().toString());
-      const wasmAmount = amountBignum.isPositive() ?
-        RustModule.WalletV4.Int.new(wasmAmountBignum)
+      const wasmAmount = amountBignum.isPositive()
+        ? RustModule.WalletV4.Int.new(wasmAmountBignum)
         : RustModule.WalletV4.Int.new_negative(wasmAmountBignum);
-      txBuilder.add_mint_asset(
-        mintScript,
-        mintName,
-        wasmAmount,
-      );
+      txBuilder.add_mint_asset(mintScript, mintName, wasmAmount);
     }
   }
   /**
@@ -924,17 +887,14 @@ function newAdaUnsignedTxFromUtxoForConnector(
   {
     const metadata = auxiliaryData.metadata ?? {};
     for (const tag of Object.keys(metadata)) {
-      txBuilder.add_json_metadatum(
-        RustModule.WalletV4.BigNum.from_str(String(tag)),
-        metadata[tag],
-      )
+      txBuilder.add_json_metadatum(RustModule.WalletV4.BigNum.from_str(String(tag)), metadata[tag]);
     }
     const nativeScripts = auxiliaryData.nativeScripts ?? [];
     if (nativeScripts.length > 0) {
-      const wasmAuxiliaryData = txBuilder.get_auxiliary_data()
-        ?? RustModule.WalletV4.AuxiliaryData.new();
-      const wasmNativeScripts = wasmAuxiliaryData.native_scripts()
-        ?? RustModule.WalletV4.NativeScripts.new();
+      const wasmAuxiliaryData =
+        txBuilder.get_auxiliary_data() ?? RustModule.WalletV4.AuxiliaryData.new();
+      const wasmNativeScripts =
+        wasmAuxiliaryData.native_scripts() ?? RustModule.WalletV4.NativeScripts.new();
       for (const scriptHex of nativeScripts) {
         const wasmNativeScript = RustModule.WalletV4.NativeScript.from_bytes(hexToBytes(scriptHex));
         wasmNativeScripts.add(wasmNativeScript);
@@ -959,7 +919,7 @@ function newAdaUnsignedTxFromUtxoForConnector(
       utxo,
       true,
       { networkId: protocolParams.networkId },
-      witness,
+      witness
     );
     if (added !== AddInputResult.VALID) {
       throw new Error('could not add designated UTXO');
@@ -980,7 +940,7 @@ function newAdaUnsignedTxFromUtxoForConnector(
   const requiredWasmValue: RustModule.WalletV4.Value = totalWasmOutput
     .clamped_sub(totalWasmInput)
     .checked_add(RustModule.WalletV4.Value.new(minWasmFee));
-  const requiredValue = multiTokenFromCardanoValue(requiredWasmValue,{
+  const requiredValue = multiTokenFromCardanoValue(requiredWasmValue, {
     defaultNetworkId: protocolParams.networkId,
     defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
   });
@@ -997,24 +957,22 @@ function newAdaUnsignedTxFromUtxoForConnector(
     [requiredValue],
     false,
     protocolParams.coinsPerUtxoWord,
-    protocolParams.networkId,
+    protocolParams.networkId
   );
 
   function addInputFromUtxo(
     inputBuilder: RustModule.WalletV4.TransactionBuilder | RustModule.WalletV4.TxInputsBuilder,
-    utxo: RemoteUnspentOutput,
-    ): void {
+    utxo: RemoteUnspentOutput
+  ): void {
     const wasmAddr = normalizeToAddress(utxo.receiver);
     if (wasmAddr == null) {
-      throw new Error(`${nameof(_newAdaUnsignedTxFromUtxo)} collateral input not a valid Shelley address`);
+      throw new Error(
+        `${nameof(_newAdaUnsignedTxFromUtxo)} collateral input not a valid Shelley address`
+      );
     }
     const txInput = utxoToTxInput(utxo);
     const wasmAmount = cardanoValueFromRemoteFormat(utxo);
-    inputBuilder.add_input(
-      wasmAddr,
-      txInput,
-      wasmAmount,
-    );
+    inputBuilder.add_input(wasmAddr, txInput, wasmAmount);
   }
 
   const changeOutputs: Array<TxOutput> = [];
@@ -1035,7 +993,9 @@ function newAdaUnsignedTxFromUtxoForConnector(
     // collateral
     if ((collateralReserve?.length ?? 0) === 0) {
       // <todo:call_reorg_for_collateral>
-      throw new Error(`${nameof(_newAdaUnsignedTxFromUtxo)} no collateral reserve inputs are available`);
+      throw new Error(
+        `${nameof(_newAdaUnsignedTxFromUtxo)} no collateral reserve inputs are available`
+      );
     }
     const collateralBuilder = RustModule.WalletV4.TxInputsBuilder.new();
     for (let i = 0; i < collateralReserve.length && i < 3; i++) {
@@ -1044,17 +1004,17 @@ function newAdaUnsignedTxFromUtxoForConnector(
     txBuilder.set_collateral(collateralBuilder);
     // script data hash
     txBuilder.calc_script_data_hash(
-      protocolParams.networkId > 0 ?
-        RustModule.WalletV4.TxBuilderConstants.plutus_vasil_cost_models()
-        : RustModule.WalletV4.TxBuilderConstants.plutus_default_cost_models(),
+      protocolParams.networkId > 0
+        ? RustModule.WalletV4.TxBuilderConstants.plutus_vasil_cost_models()
+        : RustModule.WalletV4.TxBuilderConstants.plutus_default_cost_models()
     );
   }
 
   /*
    * REQUIRED SIGNERS
    */
-  for (const reqSigner of (requiredSigners || [])) {
-    const str = (reqSigner||'').trim();
+  for (const reqSigner of requiredSigners || []) {
+    const str = (reqSigner || '').trim();
     if (str.length === 0) {
       throw new Error(`Cannot process an empty required signer! (got: "${reqSigner})"`);
     }
@@ -1126,18 +1086,17 @@ function newAdaUnsignedTxFromUtxoForConnector(
       }
     );
     return changeWasAdded
-      ? [{
-        ...changeAdaAddr,
-        values: output,
-      }]
+      ? [
+          {
+            ...changeAdaAddr,
+            values: output,
+          },
+        ]
       : [];
   })();
 
   return {
-    senderUtxos: [
-      ...mustIncludeUtxos.map(([utxo]) => utxo),
-      ...selectedUtxo,
-    ],
+    senderUtxos: [...mustIncludeUtxos.map(([utxo]) => utxo), ...selectedUtxo],
     txBuilder,
     changeAddr,
   };
@@ -1147,16 +1106,13 @@ type UtxoOrAddressing = CardanoAddressedUtxo | {| ...Address, ...Addressing |};
 
 export function signTransaction(
   senderUtxos: Array<CardanoAddressedUtxo>,
-  unsignedTx:
-    RustModule.WalletV4.TransactionBuilder |
-    RustModule.WalletV4.TransactionBody |
-    Buffer,
+  unsignedTx: RustModule.WalletV4.TransactionBuilder | RustModule.WalletV4.TransactionBody | Buffer,
   keyLevel: number,
   signingKey: RustModule.WalletV4.Bip32PrivateKey,
   stakingKeyWits: Set<string>,
   metadata: ?RustModule.WalletV4.AuxiliaryData,
   witnessSet: ?RustModule.WalletV4.TransactionWitnessSet = null,
-  otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = [],
+  otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = []
 ): RustModule.WalletV4.Transaction {
   const seenByronKeys: Set<string> = new Set();
   const seenKeyHashes: Set<string> = new Set();
@@ -1208,7 +1164,9 @@ export function signTransaction(
     // likely to match what the client expects.
     txBody = RustModule.WalletV4.TransactionBody.from_bytes(unsignedTx);
     txHash = RustModule.WalletV4.TransactionHash.from_bytes(
-      blake2b(256 / 8).update(unsignedTx).digest('binary')
+      blake2b(256 / 8)
+        .update(unsignedTx)
+        .digest('binary')
     );
   } else {
     throw new Error('unexpected tx body type');
@@ -1217,14 +1175,7 @@ export function signTransaction(
   const vkeyWits = RustModule.WalletV4.Vkeywitnesses.new();
   const bootstrapWits = RustModule.WalletV4.BootstrapWitnesses.new();
 
-  addWitnesses(
-    txHash,
-    deduped,
-    keyLevel,
-    signingKey,
-    vkeyWits,
-    bootstrapWits,
-  );
+  addWitnesses(txHash, deduped, keyLevel, signingKey, vkeyWits, bootstrapWits);
 
   const stakingKeySigSet = new Set<string>();
   for (const witness of stakingKeyWits) {
@@ -1232,11 +1183,7 @@ export function signTransaction(
       continue;
     }
     stakingKeySigSet.add(witness);
-    vkeyWits.add(
-      RustModule.WalletV4.Vkeywitness.from_bytes(
-        Buffer.from(witness, 'hex')
-      )
-    );
+    vkeyWits.add(RustModule.WalletV4.Vkeywitness.from_bytes(Buffer.from(witness, 'hex')));
   }
 
   witnessSet = witnessSet ?? RustModule.WalletV4.TransactionWitnessSet.new();
@@ -1245,26 +1192,23 @@ export function signTransaction(
 
   // Have to do this, because `Transaction.new` receives by value instead of reference
   // <TODO:SERLIB_REFERENCE_CALL_FIX>
-  const metadataClone = metadata == null ? null
-    : RustModule.WalletV4.AuxiliaryData
-      .from_bytes(Buffer.from(metadata.to_bytes()));
+  const metadataClone =
+    metadata == null
+      ? null
+      : RustModule.WalletV4.AuxiliaryData.from_bytes(Buffer.from(metadata.to_bytes()));
 
   return RustModule.WalletV4.Transaction.new(
     txBody,
     witnessSet,
     // $FlowFixMe[incompatible-call]
-    metadataClone,
+    metadataClone
   );
 }
 
-function utxoToTxInput(
-  utxo: RemoteUnspentOutput,
-): RustModule.WalletV4.TransactionInput {
+function utxoToTxInput(utxo: RemoteUnspentOutput): RustModule.WalletV4.TransactionInput {
   return RustModule.WalletV4.TransactionInput.new(
-    RustModule.WalletV4.TransactionHash.from_bytes(
-      Buffer.from(utxo.tx_hash, 'hex'),
-    ),
-    utxo.tx_index,
+    RustModule.WalletV4.TransactionHash.from_bytes(Buffer.from(utxo.tx_hash, 'hex')),
+    utxo.tx_index
   );
 }
 
@@ -1274,7 +1218,7 @@ function addWitnesses(
   keyLevel: number,
   signingKey: RustModule.WalletV4.Bip32PrivateKey,
   vkeyWits: RustModule.WalletV4.Vkeywitnesses,
-  bootstrapWits: RustModule.WalletV4.BootstrapWitnesses,
+  bootstrapWits: RustModule.WalletV4.BootstrapWitnesses
 ): void {
   // get private keys
   const privateKeys = uniqueAddressings.map(utxo => {
@@ -1287,7 +1231,7 @@ function addWitnesses(
       startingFrom: {
         level: keyLevel,
         key: signingKey,
-      }
+      },
     });
   });
 
@@ -1295,28 +1239,25 @@ function addWitnesses(
   for (let i = 0; i < uniqueAddressings.length; i++) {
     const uniqueAddressing = uniqueAddressings[i];
     const resolveAddress = (): string => {
-      if (uniqueAddressing.receiver != null)
-        return uniqueAddressing.receiver;
-      if (uniqueAddressing.address != null)
-        return uniqueAddressing.address;
-      throw new Error(`[addWitnesses] Unexpected addressing for signing: ${JSON.stringify(uniqueAddressing)}`)
-    }
+      if (uniqueAddressing.receiver != null) return uniqueAddressing.receiver;
+      if (uniqueAddressing.address != null) return uniqueAddressing.address;
+      throw new Error(
+        `[addWitnesses] Unexpected addressing for signing: ${JSON.stringify(uniqueAddressing)}`
+      );
+    };
     const wasmAddr = normalizeToAddress(resolveAddress());
     if (wasmAddr == null) {
       throw new Error(`${nameof(addWitnesses)} utxo not a valid Shelley address`);
     }
     const byronAddr = RustModule.WalletV4.ByronAddress.from_address(wasmAddr);
     if (byronAddr == null) {
-      const vkeyWit = RustModule.WalletV4.make_vkey_witness(
-        txHash,
-        privateKeys[i].to_raw_key(),
-      );
+      const vkeyWit = RustModule.WalletV4.make_vkey_witness(txHash, privateKeys[i].to_raw_key());
       vkeyWits.add(vkeyWit);
     } else {
       const bootstrapWit = RustModule.WalletV4.make_icarus_bootstrap_witness(
         txHash,
         byronAddr,
-        privateKeys[i],
+        privateKeys[i]
       );
       bootstrapWits.add(bootstrapWit);
     }
@@ -1327,29 +1268,23 @@ export function genFilterSmallUtxo(request: {|
   protocolParams: {|
     linearFee: RustModule.WalletV4.LinearFee,
   |},
-|}): (
-  RemoteUnspentOutput => boolean
-) {
+|}): RemoteUnspentOutput => boolean {
   const txBuilder = RustModule.WalletV4TxBuilder({
-      linearFee: request.protocolParams.linearFee,
-      // no need for the following parameters just to calculate the fee of adding a UTXO
-      coinsPerUtxoWord: RustModule.WalletV4.BigNum.zero(),
-      poolDeposit: RustModule.WalletV4.BigNum.zero(),
-      keyDeposit: RustModule.WalletV4.BigNum.zero(),
+    linearFee: request.protocolParams.linearFee,
+    // no need for the following parameters just to calculate the fee of adding a UTXO
+    coinsPerUtxoWord: RustModule.WalletV4.BigNum.zero(),
+    poolDeposit: RustModule.WalletV4.BigNum.zero(),
+    keyDeposit: RustModule.WalletV4.BigNum.zero(),
   });
 
-  return (utxo) => {
+  return utxo => {
     const wasmAddr = normalizeToAddress(utxo.receiver);
     if (wasmAddr == null) {
       throw new Error(`${nameof(genFilterSmallUtxo)} input not a valid Shelley address`);
     }
     const wasmAmount = cardanoValueFromRemoteFormat(utxo);
     const feeForInput = new BigNumber(
-      txBuilder.fee_for_input(
-        wasmAddr,
-        utxoToTxInput(utxo),
-        wasmAmount
-      ).to_str()
+      txBuilder.fee_for_input(wasmAddr, utxoToTxInput(utxo), wasmAmount).to_str()
     );
     return feeForInput.lte(utxo.amount);
   };

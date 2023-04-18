@@ -7,26 +7,25 @@ import LocalizedRequest from '../lib/LocalizedRequest';
 
 import type { ISignRequest } from '../../api/common/lib/transactions/ISignRequest';
 import {
-  asGetAllUtxos, asHasUtxoChains,
+  asGetAllUtxos,
+  asHasUtxoChains,
 } from '../../api/ada/lib/storage/models/PublicDeriver/traits';
 import type {
-  IGetAllUtxosResponse, IPublicDeriver,
+  IGetAllUtxosResponse,
+  IPublicDeriver,
 } from '../../api/ada/lib/storage/models/PublicDeriver/interfaces';
 import {
-  isCardanoHaskell, getCardanoHaskellBaseConfig,
+  isCardanoHaskell,
+  getCardanoHaskellBaseConfig,
   isErgo,
 } from '../../api/ada/lib/storage/database/prepackaged/networks';
-import {
-  genTimeToSlot,
-} from '../../api/ada/lib/storage/bridge/timeUtils';
+import { genTimeToSlot } from '../../api/ada/lib/storage/bridge/timeUtils';
 import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
 import type { TransactionMetadata } from '../../api/ada/lib/storage/bridge/metadataUtils';
-import {
-  MultiToken,
-} from '../../api/common/lib/MultiToken';
-import type { TokenRow, } from '../../api/ada/lib/storage/database/primitives/tables';
+import { MultiToken } from '../../api/common/lib/MultiToken';
+import type { TokenRow } from '../../api/ada/lib/storage/database/primitives/tables';
 import { getDefaultEntryToken } from './TokenInfoStore';
-import {  cardanoValueFromMultiToken } from '../../api/ada/transactions/utils';
+import { cardanoValueFromMultiToken } from '../../api/ada/transactions/utils';
 import { getReceiveAddress } from '../stateless/addressStores';
 import type { ActionsMap } from '../../actions/index';
 import type { StoresMap } from '../index';
@@ -34,7 +33,7 @@ import { maxSendableADA } from '../../api/ada/transactions/shelley/transactions'
 
 export type SetupSelfTxRequest = {|
   publicDeriver: IPublicDeriver<>,
-  filter: ElementOf<IGetAllUtxosResponse> => boolean,
+  filter: (ElementOf<IGetAllUtxosResponse>) => boolean,
 |};
 export type SetupSelfTxFunc = SetupSelfTxRequest => Promise<void>;
 
@@ -52,9 +51,8 @@ export type PlannedTxInfoMap = Array<{|
  * These can be loosened later to create a manual UTXO selection feature
  */
 export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap> {
-
   /** Stores the tx information as the user is building it */
-  @observable plannedTxInfoMap: PlannedTxInfoMap= [];
+  @observable plannedTxInfoMap: PlannedTxInfoMap = [];
 
   @observable receiver: string | null;
   /** Stores the tx used to generate the information on the send form */
@@ -62,23 +60,27 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
   /** Stores the tx that will be sent if the user confirms sending */
   @observable tentativeTx: null | ISignRequest<any>;
 
-  @observable filter: ElementOf<IGetAllUtxosResponse> => boolean;
+  @observable filter: (ElementOf<IGetAllUtxosResponse>) => boolean;
   @observable metadata: Array<TransactionMetadata> | void;
 
   /** tracks mismatch between `plannedTx` and `tentativeTx` */
   @observable txMismatch: boolean = false;
   @observable shouldSendMax: boolean = false;
   // REQUESTS
-  @observable createUnsignedTx: LocalizedRequest<DeferredCall<ISignRequest<any>>>
-    = new LocalizedRequest<DeferredCall<ISignRequest<any>>>(async func => await func());
+  @observable createUnsignedTx: LocalizedRequest<
+    DeferredCall<ISignRequest<any>>
+  > = new LocalizedRequest<DeferredCall<ISignRequest<any>>>(async func => await func());
 
-  @observable maxSendableAmount: LocalizedRequest<DeferredCall<BigNumber>>
-    = new LocalizedRequest<DeferredCall<BigNumber>>(async func => await func());
+  @observable maxSendableAmount: LocalizedRequest<DeferredCall<BigNumber>> = new LocalizedRequest<
+    DeferredCall<BigNumber>
+  >(async func => await func());
 
   @observable memo: void | string;
 
-  @observable setupSelfTx: LocalizedRequest<SetupSelfTxFunc>
-    = new LocalizedRequest<SetupSelfTxFunc>(this._setupSelfTx);
+  @observable
+  setupSelfTx: LocalizedRequest<SetupSelfTxFunc> = new LocalizedRequest<SetupSelfTxFunc>(
+    this._setupSelfTx
+  );
 
   @observable selectedToken: void | $ReadOnly<TokenRow>;
 
@@ -91,8 +93,8 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
     actions.updateAmount.listen(this._updateAmount);
     actions.updateMemo.listen(this._updateMemo);
     actions.addToken.listen(this._addToken);
-    actions.calculateMaxAmount.listen(this._maxSendableAmount)
-    actions.deselectToken.listen(this._deselectToken)
+    actions.calculateMaxAmount.listen(this._maxSendableAmount);
+    actions.deselectToken.listen(this._deselectToken);
     actions.removeTokens.listen(this._removeTokens);
     actions.updateTentativeTx.listen(this._updateTentativeTx);
     actions.updateSendAllStatus.listen(this._updateSendAllStatus);
@@ -105,28 +107,25 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
   //   computed
   // =============
 
-  @computed get
-  fee(): ?MultiToken {
+  @computed get fee(): ?MultiToken {
     if (!this.plannedTx) {
       return undefined;
     }
     return this.plannedTx.fee();
   }
 
-  @computed get
-  totalInput(): ?MultiToken {
+  @computed get totalInput(): ?MultiToken {
     if (!this.plannedTx) {
       return undefined;
     }
     return this.plannedTx.totalInput();
   }
 
-  @computed get
-  minAda(): ?MultiToken {
+  @computed get minAda(): ?MultiToken {
     const publicDeriver = this.stores.wallets.selected;
     if (!publicDeriver) throw new Error(`${nameof(this.minAda)} requires wallet to be selected`);
     const network = publicDeriver.getParent().getNetworkInfo();
-    const defaultToken = this.stores.tokenInfoStore.getDefaultTokenInfo(network.NetworkId)
+    const defaultToken = this.stores.tokenInfoStore.getDefaultTokenInfo(network.NetworkId);
     if (!isCardanoHaskell(network)) return;
 
     let minAmount;
@@ -138,24 +137,29 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
       minAmount = this.calculateMinAda(this.plannedTxInfoMap.map(({ token }) => ({ token })));
     }
 
-    return new MultiToken([{
-        identifier: defaultToken.Identifier,
-        networkId: defaultToken.NetworkId,
-        amount: new BigNumber(minAmount),
-    }], getDefaultEntryToken(defaultToken))
+    return new MultiToken(
+      [
+        {
+          identifier: defaultToken.Identifier,
+          networkId: defaultToken.NetworkId,
+          amount: new BigNumber(minAmount),
+        },
+      ],
+      getDefaultEntryToken(defaultToken)
+    );
   }
 
   @computed get shouldSendAll(): boolean {
-    return !!this.plannedTxInfoMap.find(({ shouldSendAll }) => shouldSendAll === true)
+    return !!this.plannedTxInfoMap.find(({ shouldSendAll }) => shouldSendAll === true);
   }
 
   @computed get isDefaultIncluded(): boolean {
-    return !!this.plannedTxInfoMap.find(({ token }) => token.IsDefault)
+    return !!this.plannedTxInfoMap.find(({ token }) => token.IsDefault);
   }
 
   @computed get maxAssetsAllowed(): number {
     // Note: the exact number might change in the future
-    return this.isDefaultIncluded ? 11 : 10
+    return this.isDefaultIncluded ? 11 : 10;
   }
 
   // ================
@@ -164,11 +168,11 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
 
   // eslint-disable-next-line no-restricted-syntax
   _mismatchReaction: void => mixed = reaction(
-    () => [
-      this.plannedTx,
-      this.tentativeTx,
-    ],
-    () => runInAction(() => { this.txMismatch = this._txMismatch(); })
+    () => [this.plannedTx, this.tentativeTx],
+    () =>
+      runInAction(() => {
+        this.txMismatch = this._txMismatch();
+      })
   );
 
   // ==============
@@ -178,8 +182,8 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
   // eslint-disable-next-line no-restricted-syntax
   _updatePlannedTxReaction: void => mixed = reaction(
     () => this.createUnsignedTx.result,
-    () => this._updatePlannedTx(),
-  )
+    () => this._updatePlannedTx()
+  );
 
   _updatePlannedTx: void => void = () => {
     if (!this.createUnsignedTx.result) {
@@ -193,7 +197,7 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
     runInAction(() => {
       this.plannedTx = result;
     });
-  }
+  };
 
   // ==============
   //   tx builder
@@ -211,22 +215,27 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
       this.receiver,
     ],
     async () => {
-      this._updateTxBuilder()
+      this._updateTxBuilder();
 
       if (this.plannedTxInfoMap.length !== 0 && this.shouldSendMax === true) {
-        this._maxSendableAmount()
+        this._maxSendableAmount();
       }
-    },
-  )
+    }
+  );
 
   // Generate tokens list for cardano tokens
-  _genTokenList(overrightDefaultAmount?: boolean): Array<$ReadOnly<{|
-    token: $ReadOnly<TokenRow>,
-    amount?: string,
-    shouldSendAll?: boolean,
-  |}>> {
+  _genTokenList(
+    overrightDefaultAmount?: boolean
+  ): Array<
+    $ReadOnly<{|
+      token: $ReadOnly<TokenRow>,
+      amount?: string,
+      shouldSendAll?: boolean,
+    |}>
+  > {
     const publicDeriver = this.stores.wallets.selected;
-    if (!publicDeriver) throw new Error(`${nameof(this._genTokenList)} requires wallet to be selected`);
+    if (!publicDeriver)
+      throw new Error(`${nameof(this._genTokenList)} requires wallet to be selected`);
     const network = publicDeriver.getParent().getNetworkInfo();
     const defaultToken = this.stores.tokenInfoStore.getDefaultTokenInfo(network.NetworkId);
     const plannedTxInfoMap = this.plannedTxInfoMap;
@@ -247,23 +256,23 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
       });
     } else if (
       (token &&
-      token.shouldSendAll === false &&
-      token.amount &&
-      (new BigNumber(token.amount)).lt(minAmount) &&
-      plannedTxInfoMap.length > 1) ||
+        token.shouldSendAll === false &&
+        token.amount &&
+        new BigNumber(token.amount).lt(minAmount) &&
+        plannedTxInfoMap.length > 1) ||
       overrightDefaultAmount === true
     ) {
       tokens = tokens.filter(({ token: t }) => !t.IsDefault);
       tokens.push({
         token: defaultToken,
         amount: minAmount,
-      })
+      });
     }
 
-    return tokens.map((txEntry) => ({
-        token: txEntry.token,
-        amount: txEntry.amount,
-        shouldSendAll: Boolean(txEntry.shouldSendAll),
+    return tokens.map(txEntry => ({
+      token: txEntry.token,
+      amount: txEntry.amount,
+      shouldSendAll: Boolean(txEntry.shouldSendAll),
     }));
   }
 
@@ -284,11 +293,11 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
     return true;
   }
 
-  calculateMinAda: (tokens: Array<{| token: $ReadOnly<TokenRow> |}>) => string = (tokens) => {
+  calculateMinAda: (tokens: Array<{| token: $ReadOnly<TokenRow> |}>) => string = tokens => {
     const publicDeriver = this.stores.wallets.selected;
     if (!publicDeriver) throw new Error(`${nameof(this.minAda)} requires wallet to be selected`);
     const network = publicDeriver.getParent().getNetworkInfo();
-    const defaultToken = this.stores.tokenInfoStore.getDefaultTokenInfo(network.NetworkId)
+    const defaultToken = this.stores.tokenInfoStore.getDefaultTokenInfo(network.NetworkId);
     if (!isCardanoHaskell(network)) return '0';
     const filteredTokens = tokens.filter(({ token }) => !token.IsDefault);
     if (filteredTokens.length === 0) return String(1_000_000);
@@ -296,16 +305,18 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
     const squashedConfig = fullConfig.reduce((acc, next) => Object.assign(acc, next), {});
     const fakeAmount = new BigNumber('1000000');
     const fakeMultitoken = new MultiToken(
-      [{
-        identifier: defaultToken.Identifier,
-        networkId: defaultToken.NetworkId,
-        amount: fakeAmount,
-      },
-      ...filteredTokens.map(({ token }) => ({
-        identifier: token.Identifier,
-        networkId: token.NetworkId,
-        amount: fakeAmount,
-      }))],
+      [
+        {
+          identifier: defaultToken.Identifier,
+          networkId: defaultToken.NetworkId,
+          amount: fakeAmount,
+        },
+        ...filteredTokens.map(({ token }) => ({
+          identifier: token.Identifier,
+          networkId: token.NetworkId,
+          amount: fakeAmount,
+        })),
+      ],
       getDefaultEntryToken(defaultToken)
     );
 
@@ -316,7 +327,7 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
     );
 
     return minAmount.to_str();
-  }
+  };
 
   /**
    * Note: need to check state outside of runInAction
@@ -351,7 +362,7 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
     const defaultToken = this.stores.tokenInfoStore.getDefaultTokenInfo(network.NetworkId);
     const isIncludeDefaultToken = !!plannedTxInfoMap.find(
       ({ token }) => token.Identifier === defaultToken.Identifier
-    )
+    );
 
     if (isCardanoHaskell(network)) {
       const withHasUtxoChains = asHasUtxoChains(withUtxos);
@@ -361,30 +372,36 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
 
       const fullConfig = getCardanoHaskellBaseConfig(network);
       const timeToSlot = await genTimeToSlot(fullConfig);
-      const absSlotNumber = new BigNumber(timeToSlot({
-        // use server time for TTL if connected to server
-        time: this.stores.serverConnectionStore.serverTime ?? new Date(),
-      }).slot);
+      const absSlotNumber = new BigNumber(
+        timeToSlot({
+          // use server time for TTL if connected to server
+          time: this.stores.serverConnectionStore.serverTime ?? new Date(),
+        }).slot
+      );
 
-      await this.createUnsignedTx.execute(() => this.api.ada.createUnsignedTx({
-        publicDeriver: withHasUtxoChains,
-        receiver,
-        tokens: this._genTokenList(),
-        filter: this.filter,
-        absSlotNumber,
-        metadata: this.metadata,
-      }));
+      await this.createUnsignedTx.execute(() =>
+        this.api.ada.createUnsignedTx({
+          publicDeriver: withHasUtxoChains,
+          receiver,
+          tokens: this._genTokenList(),
+          filter: this.filter,
+          absSlotNumber,
+          metadata: this.metadata,
+        })
+      );
     } else if (isErgo(network)) {
       const lastSync = this.stores.transactions.getTxRequests(publicDeriver).lastSyncInfo;
       const txFee = new BigNumber(
         RustModule.SigmaRust.BoxValue.SAFE_USER_MIN().as_i64().to_str()
       ).plus(100000); // slightly higher than default fee
 
-      const genTokenList: PlannedTxInfoMap => Array<$ReadOnly<{|
-        token: $ReadOnly<TokenRow>,
-        amount?: string,
-        shouldSendAll?: boolean,
-      |}>> = (userInput) => {
+      const genTokenList: PlannedTxInfoMap => Array<
+        $ReadOnly<{|
+          token: $ReadOnly<TokenRow>,
+          amount?: string,
+          shouldSendAll?: boolean,
+        |}>
+      > = userInput => {
         const tokens: PlannedTxInfoMap = [...userInput];
         if (!isIncludeDefaultToken) {
           // if the user is sending a token, we need to make sure the resulting box
@@ -395,33 +412,38 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
             // kind of hacky.
             // We use a larger amount for tokens
             // in hopes it covers any smart contract execution cost
-            amount: new BigNumber(10000000).toString()
+            amount: new BigNumber(10000000).toString(),
           });
         }
-        return tokens.map((txEntry) => ({
+        return tokens.map(txEntry => ({
           token: txEntry.token,
           amount: txEntry.amount,
           shouldSendAll: txEntry.shouldSendAll,
         }));
-      }
+      };
 
-      await this.createUnsignedTx.execute(() => this.api.ergo.createUnsignedTx({
-        publicDeriver: withUtxos,
-        receiver,
-        tokens: genTokenList(plannedTxInfoMap),
-        filter: this.filter,
-        currentHeight: lastSync.Height,
-        txFee,
-      }));
+      await this.createUnsignedTx.execute(() =>
+        this.api.ergo.createUnsignedTx({
+          publicDeriver: withUtxos,
+          receiver,
+          tokens: genTokenList(plannedTxInfoMap),
+          filter: this.filter,
+          currentHeight: lastSync.Height,
+          txFee,
+        })
+      );
     } else {
-      throw new Error(`${nameof(TransactionBuilderStore)}::${nameof(this._updateTxBuilder)} network not supported`);
+      throw new Error(
+        `${nameof(TransactionBuilderStore)}::${nameof(this._updateTxBuilder)} network not supported`
+      );
     }
-  }
+  };
 
   @action
-  _maxSendableAmount: void => Promise<void> = async () =>  {
+  _maxSendableAmount: void => Promise<void> = async () => {
     const publicDeriver = this.stores.wallets.selected;
-    if (!publicDeriver) throw new Error(`${nameof(this._maxSendableAmount)} requires wallet to be selected.`);
+    if (!publicDeriver)
+      throw new Error(`${nameof(this._maxSendableAmount)} requires wallet to be selected.`);
 
     const withUtxos = asGetAllUtxos(publicDeriver);
     if (withUtxos == null) {
@@ -437,50 +459,54 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
     const network = publicDeriver.getParent().getNetworkInfo();
     const fullConfig = getCardanoHaskellBaseConfig(network);
     const timeToSlot = await genTimeToSlot(fullConfig);
-    const absSlotNumber = new BigNumber(timeToSlot({
-      time: this.stores.serverConnectionStore.serverTime ?? new Date(),
-    }).slot);
+    const absSlotNumber = new BigNumber(
+      timeToSlot({
+        time: this.stores.serverConnectionStore.serverTime ?? new Date(),
+      }).slot
+    );
 
-    this.maxSendableAmount.execute(() => maxSendableADA({
-      publicDeriver: withHasUtxoChains,
-      absSlotNumber,
-      tokens: this._genTokenList(true),
-      receiver: this.receiver,
-    }))
-  }
+    this.maxSendableAmount.execute(() =>
+      maxSendableADA({
+        publicDeriver: withHasUtxoChains,
+        absSlotNumber,
+        tokens: this._genTokenList(true),
+        receiver: this.receiver,
+      })
+    );
+  };
 
   // ===========
   //   actions
   // ===========
 
   @action
-  _updateSendAllStatus: (void | boolean) => void = (status) => {
+  _updateSendAllStatus: (void | boolean) => void = status => {
     this._updateAmount(undefined, status || false);
-  }
+  };
 
   /** Should only set to valid address or undefined */
   @action
-  _updateReceiver: (void | string) => void = (receiver) => {
+  _updateReceiver: (void | string) => void = receiver => {
     this.receiver = receiver ?? null;
-  }
+  };
 
   @action
-  _setFilter: (ElementOf<IGetAllUtxosResponse> => boolean) => void = (filter) => {
+  _setFilter: ((ElementOf<IGetAllUtxosResponse>) => boolean) => void = filter => {
     this.filter = filter;
-  }
+  };
 
   /** Should only set to valid amount or undefined */
   @action
-  _updateAmount: (
-    value: ?BigNumber,
-    shouldSendAll?: boolean,
-  ) => void = (value, shouldSendAll = false) => {
+  _updateAmount: (value: ?BigNumber, shouldSendAll?: boolean) => void = (
+    value,
+    shouldSendAll = false
+  ) => {
     const publicDeriver = this.stores.wallets.selected;
-    if (!publicDeriver) throw new Error(`${nameof(this._updateAmount)} requires wallet to be selected`);
+    if (!publicDeriver)
+      throw new Error(`${nameof(this._updateAmount)} requires wallet to be selected`);
     const network = publicDeriver.getParent().getNetworkInfo();
-    const selectedToken = (
-      this.selectedToken ?? this.stores.tokenInfoStore.getDefaultTokenInfo(network.NetworkId)
-    );
+    const selectedToken =
+      this.selectedToken ?? this.stores.tokenInfoStore.getDefaultTokenInfo(network.NetworkId);
     const tokenTxInfo = this.plannedTxInfoMap.find(
       ({ token }) => token.Identifier === selectedToken.Identifier
     );
@@ -490,22 +516,22 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
         amount: value ? value.toString() : undefined,
         token: selectedToken,
         shouldSendAll,
-      })
+      });
     } else {
       tokenTxInfo.amount = value ? value.toString() : undefined;
       tokenTxInfo.shouldSendAll = shouldSendAll;
     }
-  }
+  };
 
   @action
-  _updateMetadata: (Array<TransactionMetadata> | void) => void = (metadata) => {
+  _updateMetadata: (Array<TransactionMetadata> | void) => void = metadata => {
     this.metadata = metadata;
-  }
+  };
 
   @action
-  _updateMemo: (void | string) => void = (content) => {
+  _updateMemo: (void | string) => void = content => {
     this.memo = content;
-  }
+  };
 
   @action
   _addToken: ({|
@@ -516,49 +542,49 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
     if (!publicDeriver) throw new Error(`${nameof(this._addToken)} requires wallet to be selected`);
     const network = publicDeriver.getParent().getNetworkInfo();
 
-    const selectedToken = (
-      token ?? this.stores.tokenInfoStore.getDefaultTokenInfo(network.NetworkId)
-    );
-    const tokensToAdd = [{ token: selectedToken }]
+    const selectedToken =
+      token ?? this.stores.tokenInfoStore.getDefaultTokenInfo(network.NetworkId);
+    const tokensToAdd = [{ token: selectedToken }];
     if (shouldReset === true) {
       this.plannedTxInfoMap = tokensToAdd;
     } else {
-        const tokenTxInfo = this.plannedTxInfoMap.find(
-          ({ token: t }) => t.Identifier === selectedToken.Identifier
-        );
+      const tokenTxInfo = this.plannedTxInfoMap.find(
+        ({ token: t }) => t.Identifier === selectedToken.Identifier
+      );
 
-        if (!tokenTxInfo) {
-          this.plannedTxInfoMap.push(...tokensToAdd)
-        }
+      if (!tokenTxInfo) {
+        this.plannedTxInfoMap.push(...tokensToAdd);
+      }
     }
 
     this.selectedToken = token;
     // no `selectedToken` === Selecting the default token.
     // Editing the default token amount means we are not sending the max amount.
     if (!token) this.shouldSendMax = false;
-  }
+  };
 
   @action
-  _removeTokens: (tokens: Array<$ReadOnly<TokenRow>>) => void = (tokens) => {
+  _removeTokens: (tokens: Array<$ReadOnly<TokenRow>>) => void = tokens => {
     // Todo: Fix removing the default asset
     const publicDeriver = this.stores.wallets.selected;
-    if (!publicDeriver) throw new Error(`${nameof(this._removeTokens)} requires wallet to be selected`);
+    if (!publicDeriver)
+      throw new Error(`${nameof(this._removeTokens)} requires wallet to be selected`);
 
     const tokenIds = new Set();
-    tokens.forEach(token => tokenIds.add(token.Identifier))
+    tokens.forEach(token => tokenIds.add(token.Identifier));
 
     this.plannedTxInfoMap = this.plannedTxInfoMap.filter(
       ({ token: t }) => !tokenIds.has(t.Identifier)
     );
 
     // Deselect the token
-    this._deselectToken()
-  }
+    this._deselectToken();
+  };
 
   @action
   _deselectToken: void => void = () => {
     this.selectedToken = undefined;
-  }
+  };
 
   @action
   _updateTentativeTx: void => void = () => {
@@ -567,12 +593,12 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
       return;
     }
     this.tentativeTx = this._cloneTx(this.plannedTx);
-  }
+  };
 
   @action
-  _initialize: SetupSelfTxRequest => Promise<void> = async (request) => {
+  _initialize: SetupSelfTxRequest => Promise<void> = async request => {
     await this.setupSelfTx.execute(request);
-  }
+  };
 
   @action
   _reset: void => void = () => {
@@ -583,14 +609,14 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
     this.metadata = undefined;
     this.createUnsignedTx.cancel();
     this.createUnsignedTx.reset();
-    this.maxSendableAmount.cancel()
+    this.maxSendableAmount.cancel();
     this.maxSendableAmount.reset();
     this.plannedTx = null;
     this.tentativeTx = null;
     this.shouldSendMax = false;
     this.setupSelfTx.cancel();
     this.setupSelfTx.reset();
-  }
+  };
 
   // =======================================
   //   logic to handle confirmation screen
@@ -600,18 +626,17 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
    * We need to clone to tentative tx to avoid the dialog changing
    * when the send page recalculates the utxo
    */
-  _cloneTx: ISignRequest<mixed> => ISignRequest<mixed> = (
-    signRequest
-  ) => {
+  _cloneTx: (ISignRequest<mixed>) => ISignRequest<mixed> = signRequest => {
     /* In the Rust code, it may be that signing a transaction is destructive
      * as it frees the pointer to the original tx.
      *
      * To avoid the back button breaking the send page form, we clone the tx
      */
-    return toJS( // drop mobx observable behavior
+    return toJS(
+      // drop mobx observable behavior
       signRequest
     );
-  }
+  };
 
   /**
    * Check if tx in the confirm dialog matches what the tx would be
@@ -625,7 +650,7 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
     }
 
     return !this.tentativeTx.isEqual(this.plannedTx.self());
-  }
+  };
 
   _setupSelfTx: SetupSelfTxFunc = async (request): Promise<void> => {
     this._setFilter(request.filter);
@@ -642,5 +667,5 @@ export default class TransactionBuilderStore extends Store<StoresMap, ActionsMap
     await this._updateTxBuilder();
     this._updatePlannedTx();
     this._updateTentativeTx();
-  }
+  };
 }
